@@ -1,0 +1,11 @@
+iuh\fit\edu\backend\modules\user\service\UserService.class
+iuh\fit\edu\backend\modules\notification\controller\InternalNotificationController.class
+iuh\fit\edu\backend\modules\user\service\impl\LocalUserServiceImpl.class
+iuh\fit\edu\backend\modules\notification\event\payload\NotificationEvent$NotificationEventBuilder.class
+iuh\fit\edu\backend\modules\notification\event\publisher\NotificationEventPublisher.class
+iuh\fit\edu\backend\modules\notification\service\impl\NotificationServiceImpl.class
+iuh\fit\edu\backend\modules\notification\event\handler\NotificationEventHandler.class
+iuh\fit\edu\backend\modules\notification\service\NotificationService.class
+iuh\fit\edu\backend\modules\notification\controller\NotificationController.class
+iuh\fit\edu\backend\modules\notification\event\payload\NotificationEvent.class
+iuh\fit\edu\backend\NotificationServiceApplication.class

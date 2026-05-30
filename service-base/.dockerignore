@@ -1,0 +1,14 @@
+# Khong gui vao build context (giam size + tranh dung lai artifact local)
+**/target/
+**/.mvn/
+**/mvnw
+**/mvnw.cmd
+**/*.iml
+**/.idea/
+**/.git/
+reports/
+*.md
+backend/
+.env
+.env.*
+!.env.example

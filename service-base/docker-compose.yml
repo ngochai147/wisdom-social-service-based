@@ -1,0 +1,164 @@
+services:
+  # ===== Infx (DB dùng chung) =====
+  redis:
+    image: redis:7-alpine
+    container_name: sb-redis
+    command: ["redis-server", "--requirepass", "${SPRING_DATA_REDIS_PASSWORD:-sapassword}"]
+    ports:
+      - "6379:6379"
+    networks: [sb-net]
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${SPRING_DATA_REDIS_PASSWORD:-sapassword}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===== media-service (8081) =====
+  media-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_DIR: media-service
+    container_name: sb-media
+    env_file: [.env]
+    environment:
+      SERVER_PORT: 8081
+      SPRING_DATA_REDIS_PASSWORD: ${SPRING_DATA_REDIS_PASSWORD:-sapassword}
+    ports:
+      - "8081:8081"
+    networks: [sb-net]
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # ===== user-chat-service (8082) =====
+  user-chat-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_DIR: user-chat-service
+    container_name: sb-user-chat
+    env_file: [.env]
+    environment:
+      SERVER_PORT: 8082
+      SPRING_DATA_REDIS_PASSWORD: ${SPRING_DATA_REDIS_PASSWORD:-sapassword}
+    ports:
+      - "8082:8082"
+    networks: [sb-net]
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # ===== content-service (8083) =====
+  content-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_DIR: content-service
+    container_name: sb-content
+    env_file: [.env]
+    environment:
+      SERVER_PORT: 8083
+      SPRING_DATA_REDIS_PASSWORD: ${SPRING_DATA_REDIS_PASSWORD:-sapassword}
+    ports:
+      - "8083:8083"
+    networks: [sb-net]
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # ===== notification-service (8084) =====
+  notification-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_DIR: notification-service
+    container_name: sb-notification
+    env_file: [.env]
+    environment:
+      SERVER_PORT: 8084
+      SPRING_DATA_REDIS_PASSWORD: ${SPRING_DATA_REDIS_PASSWORD:-sapassword}
+    ports:
+      - "8084:8084"
+    networks: [sb-net]
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # ===== ai-service (8085) =====
+  ai-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_DIR: ai-service
+    container_name: sb-ai
+    env_file: [.env]
+    environment:
+      SERVER_PORT: 8085
+      SPRING_DATA_REDIS_PASSWORD: ${SPRING_DATA_REDIS_PASSWORD:-sapassword}
+    ports:
+      - "8085:8085"
+    networks: [sb-net]
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # ===== gateway-service (8080) — entry-point cho frontend-web =====
+  gateway-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_DIR: gateway-service
+    container_name: sb-gateway
+    env_file: [.env]
+    environment:
+      SERVER_PORT: 8080
+      SPRING_DATA_REDIS_PASSWORD: ${SPRING_DATA_REDIS_PASSWORD:-sapassword}
+      # Tro toi cac service khac qua ten container trong mang sb-net
+      USER_CHAT_URI: http://user-chat-service:8082
+      CONTENT_URI: http://content-service:8083
+      NOTIFICATION_URI: http://notification-service:8084
+      AI_URI: http://ai-service:8085
+      MEDIA_URI: http://media-service:8081
+    ports:
+      - "8080:8080"
+    networks: [sb-net]
+    depends_on:
+      - media-service
+      - user-chat-service
+      - content-service
+      - notification-service
+      - ai-service
+
+  # ===== frontend-web (5173) =====
+  frontend-web:
+    image: node:22-alpine
+    container_name: sb-frontend-web
+    working_dir: /app
+    command: sh -c "npm ci && npm run dev -- --host 0.0.0.0"
+    environment:
+      VITE_API_BASE_URL: /api
+      VITE_SOCKJS_URL: /ws
+      VITE_DEV_PROXY_TARGET: http://gateway-service:8080
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - ../frontend-web:/app
+      - frontend-node-modules:/app/node_modules
+    ports:
+      - "5173:5173"
+    networks: [sb-net]
+    depends_on:
+      - gateway-service
+
+networks:
+  sb-net:
+    driver: bridge
+
+volumes:
+  frontend-node-modules:

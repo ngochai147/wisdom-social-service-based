@@ -1,0 +1,8 @@
+iuh\fit\edu\backend\common\constant\UploadModule.class
+iuh\fit\edu\backend\common\dto\response\BulkPresignedRequest$FileInfo.class
+iuh\fit\edu\backend\common\dto\response\BulkPresignedRequest.class
+iuh\fit\edu\backend\common\dto\response\PresignedUrlResponse$PresignedUrlResponseBuilder.class
+iuh\fit\edu\backend\modules\media\application\MediaStoragePort.class
+iuh\fit\edu\backend\common\dto\response\PresignedUrlResponse.class
+iuh\fit\edu\backend\common\exception\MediaStorageException.class
+iuh\fit\edu\backend\common\exception\MediaUnavailableException.class

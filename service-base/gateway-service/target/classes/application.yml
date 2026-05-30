@@ -1,0 +1,30 @@
+server:
+  # Frontend-web mong doi backend o cong 8080 (xem frontend-web/.env.development:
+  # VITE_DEV_PROXY_TARGET=http://localhost:8080). Gateway dong vai tro do.
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: gateway-service
+  cloud:
+    gateway:
+      # Khu header CORS bi lap khi backend cung tra CORS -> tranh loi
+      # "multiple values for Access-Control-Allow-Origin" tren trinh duyet.
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_UNIQUE
+
+# URI dich cua tung service. Mac dinh localhost (chay start-all.sh / spring-boot:run).
+# Docker-compose override bang ten container (USER_CHAT_URI=http://user-chat-service:8082 ...).
+gateway:
+  uri:
+    user-chat: ${USER_CHAT_URI:http://localhost:8082}
+    content: ${CONTENT_URI:http://localhost:8083}
+    notification: ${NOTIFICATION_URI:http://localhost:8084}
+    ai: ${AI_URI:http://localhost:8085}
+    media: ${MEDIA_URI:http://localhost:8081}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway
