@@ -1,0 +1,242 @@
+name: Deploy service-base
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "service-base/**"
+      - ".github/workflows/deploy-service-base.yml"
+  workflow_dispatch:
+    inputs:
+      service:
+        description: "Service to deploy. Use all for first deploy."
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - all
+          - gateway-service
+          - media-service
+          - user-chat-service
+          - content-service
+          - notification-service
+          - ai-service
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.detect.outputs.matrix }}
+      compose_services: ${{ steps.detect.outputs.compose_services }}
+      deploy_all: ${{ steps.detect.outputs.deploy_all }}
+      has_changes: ${{ steps.detect.outputs.has_changes }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed services
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          all_matrix='[
+            {"service_dir":"gateway-service","ecr_repo":"wisdom-social-gateway-service","compose_service":"gateway-service"},
+            {"service_dir":"media-service","ecr_repo":"wisdom-social-media-service","compose_service":"media-service"},
+            {"service_dir":"user-chat-service","ecr_repo":"wisdom-social-user-chat-service","compose_service":"user-chat-service"},
+            {"service_dir":"content-service","ecr_repo":"wisdom-social-content-service","compose_service":"content-service"},
+            {"service_dir":"notification-service","ecr_repo":"wisdom-social-notification-service","compose_service":"notification-service"},
+            {"service_dir":"ai-service","ecr_repo":"wisdom-social-ai-service","compose_service":"ai-service"}
+          ]'
+          all_services='gateway-service media-service user-chat-service content-service notification-service ai-service'
+
+          add_service() {
+            local service_dir="$1"
+            local ecr_repo="$2"
+            local compose_service="$3"
+            if [[ " ${services[*]:-} " != *" ${compose_service} "* ]]; then
+              services+=("${compose_service}")
+              entries+=("{\"service_dir\":\"${service_dir}\",\"ecr_repo\":\"${ecr_repo}\",\"compose_service\":\"${compose_service}\"}")
+            fi
+          }
+
+          services=()
+          entries=()
+          deploy_all=false
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            selected="${{ inputs.service }}"
+            case "$selected" in
+              all)
+                echo "matrix=$(echo "$all_matrix" | tr -d '\n ')" >> "$GITHUB_OUTPUT"
+                echo "compose_services=$all_services" >> "$GITHUB_OUTPUT"
+                echo "deploy_all=true" >> "$GITHUB_OUTPUT"
+                echo "has_changes=true" >> "$GITHUB_OUTPUT"
+                exit 0
+                ;;
+              gateway-service) add_service gateway-service wisdom-social-gateway-service gateway-service ;;
+              media-service) add_service media-service wisdom-social-media-service media-service ;;
+              user-chat-service) add_service user-chat-service wisdom-social-user-chat-service user-chat-service ;;
+              content-service) add_service content-service wisdom-social-content-service content-service ;;
+              notification-service) add_service notification-service wisdom-social-notification-service notification-service ;;
+              ai-service) add_service ai-service wisdom-social-ai-service ai-service ;;
+            esac
+          else
+            before="${{ github.event.before }}"
+            if [[ "$before" =~ ^0+$ ]]; then
+              deploy_all=true
+            else
+              changed_files="$(git diff --name-only "$before" "${{ github.sha }}")"
+              echo "$changed_files"
+
+              while IFS= read -r file; do
+                [[ -z "$file" ]] && continue
+                case "$file" in
+                  service-base/Dockerfile|service-base/common-lib/*|service-base/common-core/*|service-base/persistence-lib/*)
+                    deploy_all=true
+                    ;;
+                  service-base/docker-compose.prod.yml|.github/workflows/deploy-service-base.yml)
+                    deploy_all=true
+                    ;;
+                  service-base/gateway-service/*)
+                    add_service gateway-service wisdom-social-gateway-service gateway-service
+                    ;;
+                  service-base/media-service/*)
+                    add_service media-service wisdom-social-media-service media-service
+                    ;;
+                  service-base/user-chat-service/*)
+                    add_service user-chat-service wisdom-social-user-chat-service user-chat-service
+                    ;;
+                  service-base/content-service/*)
+                    add_service content-service wisdom-social-content-service content-service
+                    ;;
+                  service-base/notification-service/*)
+                    add_service notification-service wisdom-social-notification-service notification-service
+                    ;;
+                  service-base/ai-service/*)
+                    add_service ai-service wisdom-social-ai-service ai-service
+                    ;;
+                esac
+              done <<< "$changed_files"
+            fi
+          fi
+
+          if [[ "$deploy_all" == "true" ]]; then
+            echo "matrix=$(echo "$all_matrix" | tr -d '\n ')" >> "$GITHUB_OUTPUT"
+            echo "compose_services=$all_services" >> "$GITHUB_OUTPUT"
+            echo "deploy_all=true" >> "$GITHUB_OUTPUT"
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ "${#entries[@]}" -eq 0 ]]; then
+            echo "matrix=[]" >> "$GITHUB_OUTPUT"
+            echo "compose_services=" >> "$GITHUB_OUTPUT"
+            echo "deploy_all=false" >> "$GITHUB_OUTPUT"
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          matrix_json="[$(IFS=,; echo "${entries[*]}")]"
+          compose_services="$(IFS=' '; echo "${services[*]}")"
+          echo "matrix=$matrix_json" >> "$GITHUB_OUTPUT"
+          echo "compose_services=$compose_services" >> "$GITHUB_OUTPUT"
+          echo "deploy_all=false" >> "$GITHUB_OUTPUT"
+          echo "has_changes=true" >> "$GITHUB_OUTPUT"
+
+  build-push:
+    runs-on: ubuntu-latest
+    needs: detect
+    if: needs.detect.outputs.has_changes == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.detect.outputs.matrix) }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push ${{ matrix.service_dir }}
+        uses: docker/build-push-action@v6
+        with:
+          context: ./service-base
+          file: ./service-base/Dockerfile
+          build-args: |
+            SERVICE_DIR=${{ matrix.service_dir }}
+          push: true
+          tags: |
+            ${{ env.ECR_REGISTRY }}/${{ matrix.ecr_repo }}:${{ env.IMAGE_TAG }}
+            ${{ env.ECR_REGISTRY }}/${{ matrix.ecr_repo }}:latest
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [detect, build-push]
+    if: needs.detect.outputs.has_changes == 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Upload compose file to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          source: "service-base/docker-compose.prod.yml"
+          target: "/opt/wisdom-social/service-base"
+          strip_components: 1
+
+      - name: Deploy changed services on EC2
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            cd /opt/wisdom-social/service-base
+
+            aws ecr get-login-password --region ${{ secrets.AWS_REGION }} \
+              | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+
+            docker compose -f docker-compose.prod.yml up -d redis
+
+            SERVICES="${{ needs.detect.outputs.compose_services }}"
+            if [ "${{ needs.detect.outputs.deploy_all }}" = "true" ]; then
+              IMAGE_TAG=${{ github.sha }} docker compose -f docker-compose.prod.yml pull $SERVICES
+              IMAGE_TAG=${{ github.sha }} docker compose -f docker-compose.prod.yml up -d $SERVICES
+            else
+              IMAGE_TAG=${{ github.sha }} docker compose -f docker-compose.prod.yml pull $SERVICES
+              IMAGE_TAG=${{ github.sha }} docker compose -f docker-compose.prod.yml up -d --no-deps $SERVICES
+            fi
+
+            docker compose -f docker-compose.prod.yml ps
+            sleep 20
+            curl -f http://localhost:8080/actuator/health

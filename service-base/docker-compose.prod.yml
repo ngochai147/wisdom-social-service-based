@@ -1,0 +1,120 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: sb-redis
+    command: ["redis-server", "--requirepass", "${SPRING_DATA_REDIS_PASSWORD}"]
+    networks: [sb-net]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${SPRING_DATA_REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  media-service:
+    image: ${ECR_REGISTRY}/wisdom-social-media-service:${IMAGE_TAG:-latest}
+    container_name: sb-media
+    env_file: [.env]
+    environment:
+      SERVER_PORT: 8081
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+    networks: [sb-net]
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  user-chat-service:
+    image: ${ECR_REGISTRY}/wisdom-social-user-chat-service:${IMAGE_TAG:-latest}
+    container_name: sb-user-chat
+    env_file: [.env]
+    environment:
+      SERVER_PORT: 8082
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      MEDIA_SERVICE_BASE_URL: http://media-service:8081
+    networks: [sb-net]
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      media-service:
+        condition: service_started
+
+  content-service:
+    image: ${ECR_REGISTRY}/wisdom-social-content-service:${IMAGE_TAG:-latest}
+    container_name: sb-content
+    env_file: [.env]
+    environment:
+      SERVER_PORT: 8083
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      MEDIA_SERVICE_BASE_URL: http://media-service:8081
+      USER_SERVICE_BASE_URL: http://user-chat-service:8082
+      NOTIFICATION_SERVICE_BASE_URL: http://notification-service:8084
+    networks: [sb-net]
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      media-service:
+        condition: service_started
+      user-chat-service:
+        condition: service_started
+      notification-service:
+        condition: service_started
+
+  notification-service:
+    image: ${ECR_REGISTRY}/wisdom-social-notification-service:${IMAGE_TAG:-latest}
+    container_name: sb-notification
+    env_file: [.env]
+    environment:
+      SERVER_PORT: 8084
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+    networks: [sb-net]
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  ai-service:
+    image: ${ECR_REGISTRY}/wisdom-social-ai-service:${IMAGE_TAG:-latest}
+    container_name: sb-ai
+    env_file: [.env]
+    environment:
+      SERVER_PORT: 8085
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+    networks: [sb-net]
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  gateway-service:
+    image: ${ECR_REGISTRY}/wisdom-social-gateway-service:${IMAGE_TAG:-latest}
+    container_name: sb-gateway
+    env_file: [.env]
+    environment:
+      SERVER_PORT: 8080
+      USER_CHAT_URI: http://user-chat-service:8082
+      CONTENT_URI: http://content-service:8083
+      NOTIFICATION_URI: http://notification-service:8084
+      AI_URI: http://ai-service:8085
+      MEDIA_URI: http://media-service:8081
+    ports:
+      - "8080:8080"
+    networks: [sb-net]
+    restart: unless-stopped
+    depends_on:
+      - media-service
+      - user-chat-service
+      - content-service
+      - notification-service
+      - ai-service
+
+networks:
+  sb-net:
+    driver: bridge
