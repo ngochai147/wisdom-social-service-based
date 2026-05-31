@@ -23,7 +23,7 @@ public class CorsConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(Arrays.asList(
+        configuration.setAllowedOriginPatterns(Arrays.asList(
                 "http://localhost:5173",
                 "http://localhost:5174",// Web frontend (dev)
                 "http://localhost:4173",     // Web frontend (preview)
@@ -38,8 +38,10 @@ public class CorsConfig {
                 "http://192.168.5.60:19000",
                 "http://192.168.1.151:19000",
                 "http://172.20.10.2:8081", 
-                "https://wisdom-social.vercel.app"// Expo Go from IP
-
+                "https://wisdom-social.vercel.app",
+                "https://wisdom-social-service-based.vercel.app",
+                "https://wisdom-social-service-based-*.vercel.app",
+                "https://wisdom-social-service-based-git-*.vercel.app"
         ));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH")); // Allowed methods
         configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "Accept", "x-no-retry"));
