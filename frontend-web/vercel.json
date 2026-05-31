@@ -4,11 +4,11 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "http://54.169.220.216:8080/api/:path*"
+      "destination": "http://47.130.132.66:8080/api/:path*"
     },
     {
       "source": "/ws/:path*",
-      "destination": "http://54.169.220.216:8080/ws/:path*"
+      "destination": "http://47.130.132.66:8080/ws/:path*"
     },
     {
       "source": "/(.*)",
