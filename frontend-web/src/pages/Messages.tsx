@@ -40,6 +40,7 @@ import { useSidebarLayout } from "../hooks/useSidebarLayout";
 import { useAuth } from "../contexts/AuthContext";
 import chatService, {
     type ChatUserSearchResult,
+    type ConversationSidebar,
     type ConversationMediaItem,
     type ConversationMediaType,
     type Message,
@@ -207,6 +208,8 @@ export default function Messages() {
         useState<ChatUserSearchResult | null>(null);
     const [selectedChatUserMeta, setSelectedChatUserMeta] =
         useState<ChatUserSearchResult | null>(null);
+    const [activeCallConversationId, setActiveCallConversationId] =
+        useState<number | null>(null);
     const [previewMessageText, setPreviewMessageText] = useState("");
     const [previewSending, setPreviewSending] = useState(false);
 
@@ -412,6 +415,36 @@ export default function Messages() {
     const selectedDisplayInfo = selectedConversation
         ? getDisplayInfo(selectedConversation)
         : null;
+    const selectedDirectPartnerId = useMemo(() => {
+        if (selectedConversation?.type !== "DIRECT") return undefined;
+
+        const candidates = [
+            selectedConversation.directPartnerId,
+            selectedConversation.members?.find(
+                (member) => Number(member.userId) !== Number(currentUserId),
+            )?.userId,
+            selectedChatUserMeta?.existingDirectConversationId ===
+            selectedConversation.id
+                ? selectedChatUserMeta.userId
+                : undefined,
+        ];
+
+        const partnerId = candidates
+            .map((value) => Number(value))
+            .find(
+                (value) =>
+                    Number.isFinite(value) &&
+                    value > 0 &&
+                    value !== Number(currentUserId),
+            );
+
+        return partnerId;
+    }, [
+        currentUserId,
+        selectedChatUserMeta?.existingDirectConversationId,
+        selectedChatUserMeta?.userId,
+        selectedConversation,
+    ]);
 
     const selectedStatus = selectedConversation?.lastMessage?.lastMessageAt
         ? `Hoạt động ${formatTime(selectedConversation.lastMessage.lastMessageAt)} trước`
@@ -667,6 +700,57 @@ export default function Messages() {
     const handleConversationForbidden = useCallback(() => {
         closeGroupDetailSurfaces();
     }, [closeGroupDetailSurfaces]);
+
+    const handleActiveCallChange = useCallback(
+        (conversationId: number, active: boolean) => {
+            setActiveCallConversationId((current) => {
+                if (active) return conversationId;
+                return current === conversationId ? null : current;
+            });
+        },
+        [],
+    );
+
+    const getConversationSnapshot = useCallback(
+        (conversationId: number) =>
+            conversations.find((conv) => conv.id === conversationId) ||
+            chatRuntimeStore.getConversation(conversationId) ||
+            null,
+        [conversations],
+    );
+
+    const resolveDirectPartnerId = useCallback(
+        (conversation: ConversationSidebar | null) => {
+            if (conversation?.type !== "DIRECT") return undefined;
+
+            const partnerId = Number(
+                conversation.directPartnerId ??
+                    conversation.members?.find(
+                        (member) =>
+                            Number(member.userId) !== Number(currentUserId),
+                    )?.userId,
+            );
+
+            return Number.isFinite(partnerId) &&
+                partnerId > 0 &&
+                partnerId !== Number(currentUserId)
+                ? partnerId
+                : undefined;
+        },
+        [currentUserId],
+    );
+
+    const renderedChatConversationIds = useMemo(() => {
+        const ids: number[] = [];
+        if (selectedConversationId) ids.push(selectedConversationId);
+        if (
+            activeCallConversationId &&
+            activeCallConversationId !== selectedConversationId
+        ) {
+            ids.push(activeCallConversationId);
+        }
+        return ids;
+    }, [activeCallConversationId, selectedConversationId]);
 
     const closeConfirmBlock = useCallback(() => {
         setBlockTargetUserId(null);
@@ -1828,40 +1912,118 @@ export default function Messages() {
                             <div
                                 className={`flex-1 min-w-0 transition-[margin] duration-300 ease-out ${showInfoPanel ? "xl:mr-88" : "xl:mr-0"}`}
                             >
-                                <ChatWindow
-                                    key={selectedConversationId}
-                                    conversationId={selectedConversationId}
-                                    onMarkAsRead={clearUnreadCount}
-                                    onToggleInfoPanel={handleToggleInfoPanel}
-                                    showInfoPanel={showInfoPanel}
-                                    forcedReadOnlyNotice={
-                                        selectedConversationReadOnlyNotice
-                                    }
-                                    onForbidden={handleConversationForbidden}
-                                    peerRelationshipInfo={
-                                        selectedChatUserMeta &&
-                                        selectedConversationId ===
-                                            (selectedChatUserMeta.existingDirectConversationId ??
-                                                selectedConversationId)
-                                            ? selectedChatUserMeta
-                                            : null
-                                    }
-                                    name={selectedDisplayInfo?.name}
-                                    avatarUrl={
-                                        selectedDisplayInfo?.avatar ?? undefined
-                                    }
-                                    compositeAvatarUrls={
-                                        selectedDisplayInfo?.hasCompositeAvatar
-                                            ? selectedDisplayInfo.compositeAvatars
-                                            : undefined
-                                    }
-                                    openPollMessageId={openPollMessageId}
-                                    openPollModalToken={openPollModalToken}
-                                    onPollModalClose={() =>
-                                        setOpenPollMessageId(null)
-                                    }
-                                    searchOpenSignal={searchOpenSignal}
-                                />
+                                {renderedChatConversationIds.map(
+                                    (conversationId) => {
+                                        const isVisible =
+                                            conversationId ===
+                                            selectedConversationId;
+                                        const conversationForWindow =
+                                            isVisible
+                                                ? selectedConversation
+                                                : getConversationSnapshot(
+                                                      conversationId,
+                                                  );
+                                        const displayInfo = isVisible
+                                            ? selectedDisplayInfo
+                                            : conversationForWindow
+                                              ? getDisplayInfo(
+                                                    conversationForWindow,
+                                                )
+                                              : null;
+
+                                        return (
+                                            <div
+                                                key={conversationId}
+                                                className={
+                                                    isVisible
+                                                        ? "h-full min-h-0"
+                                                        : "hidden"
+                                                }
+                                            >
+                                                <ChatWindow
+                                                    conversationId={
+                                                        conversationId
+                                                    }
+                                                    onMarkAsRead={
+                                                        clearUnreadCount
+                                                    }
+                                                    onToggleInfoPanel={
+                                                        isVisible
+                                                            ? handleToggleInfoPanel
+                                                            : undefined
+                                                    }
+                                                    showInfoPanel={
+                                                        isVisible &&
+                                                        showInfoPanel
+                                                    }
+                                                    forcedReadOnlyNotice={
+                                                        isVisible
+                                                            ? selectedConversationReadOnlyNotice
+                                                            : null
+                                                    }
+                                                    onForbidden={
+                                                        handleConversationForbidden
+                                                    }
+                                                    peerRelationshipInfo={
+                                                        isVisible &&
+                                                        selectedChatUserMeta &&
+                                                        conversationId ===
+                                                            (selectedChatUserMeta.existingDirectConversationId ??
+                                                                conversationId)
+                                                            ? selectedChatUserMeta
+                                                            : null
+                                                    }
+                                                    name={displayInfo?.name}
+                                                    avatarUrl={
+                                                        displayInfo?.avatar ??
+                                                        undefined
+                                                    }
+                                                    compositeAvatarUrls={
+                                                        displayInfo?.hasCompositeAvatar
+                                                            ? displayInfo.compositeAvatars
+                                                            : undefined
+                                                    }
+                                                    conversationType={
+                                                        conversationForWindow?.type
+                                                    }
+                                                    conversationMembers={
+                                                        conversationForWindow?.members
+                                                    }
+                                                    directPartnerId={
+                                                        isVisible
+                                                            ? selectedDirectPartnerId
+                                                            : resolveDirectPartnerId(
+                                                                  conversationForWindow,
+                                                              )
+                                                    }
+                                                    openPollMessageId={
+                                                        isVisible
+                                                            ? openPollMessageId
+                                                            : null
+                                                    }
+                                                    openPollModalToken={
+                                                        isVisible
+                                                            ? openPollModalToken
+                                                            : 0
+                                                    }
+                                                    onPollModalClose={() =>
+                                                        setOpenPollMessageId(
+                                                            null,
+                                                        )
+                                                    }
+                                                    searchOpenSignal={
+                                                        isVisible
+                                                            ? searchOpenSignal
+                                                            : 0
+                                                    }
+                                                    onActiveCallChange={
+                                                        handleActiveCallChange
+                                                    }
+                                                />
+                                            </div>
+                                        );
+                                    },
+                                )}
                             </div>
 
                             {isInfoPanelRendered && (
