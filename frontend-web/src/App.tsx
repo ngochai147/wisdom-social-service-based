@@ -17,6 +17,7 @@ import MainLayout from "./components/layout/MainLayout";
 import PublicLayout from "./components/layout/PublicLayout";
 import RequireAuth from "./components/auth/RequireAuth";
 import PostModal from "./components/post/post-modal/PostModal";
+import GlobalIncomingCallNotifier from "./components/message/GlobalIncomingCallNotifier";
 
 // Auth Pages
 import Login from "./pages/LogIn";
@@ -108,6 +109,7 @@ function App() {
                       style: { background: "#333", color: "#fff" },
                     }}
                   />
+                  <GlobalIncomingCallNotifier />
 
                   <Routes location={backgroundLocation || location}>
                     {/* Public Routes */}
@@ -160,6 +162,10 @@ function App() {
                       <Route path="/messages" element={<Messages />} />
                       <Route
                         path="/messages/:conversationId"
+                        element={<Messages />}
+                      />
+                      <Route
+                        path="/messages/:conversationId/call"
                         element={<Messages />}
                       />
                       <Route path="/create" element={<CreatePost />} />

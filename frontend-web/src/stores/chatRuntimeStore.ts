@@ -22,6 +22,12 @@ export interface ConversationPagingState {
 }
 
 export type MembersByUserId = Record<number, ConversationMember>;
+export interface ActiveCallRuntimeState {
+    callId: string;
+    conversationId: number;
+    callType: "audio" | "video";
+    userId: number;
+}
 interface RemovePendingRequestsOptions {
     requestIds?: number[];
     userIds?: number[];
@@ -50,6 +56,7 @@ class ChatRuntimeStore {
         number,
         ConversationPagingState
     >();
+    private activeCall: ActiveCallRuntimeState | null = null;
 
     private createDefaultPagingState(): ConversationPagingState {
         return {
@@ -182,6 +189,14 @@ class ChatRuntimeStore {
     clearConversationRuntime(conversationId: number): void {
         this.messagesByConversation.delete(conversationId);
         this.pagingByConversation.delete(conversationId);
+    }
+
+    setActiveCall(call: ActiveCallRuntimeState | null): void {
+        this.activeCall = call;
+    }
+
+    getActiveCall(): ActiveCallRuntimeState | null {
+        return this.activeCall;
     }
 }
 
