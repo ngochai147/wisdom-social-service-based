@@ -26,7 +26,7 @@ import {
   Mic,
   Square,
   Paperclip,
-  StickyNote,
+  Sparkles,
   Film,
   Smile,
   Search,
@@ -1487,6 +1487,7 @@ function ChatWindowContent({
   const handleApplySuggestion = useCallback(
     (suggestion: string) => {
       setMessageText(suggestion);
+      setIsAiPanelOpen(false);
       requestAnimationFrame(() => {
         messageInputRef.current?.focus();
       });
@@ -2612,32 +2613,6 @@ function ChatWindowContent({
         )}
       </div>
 
-      <div className=" bg-white dark:bg-black px-4 pb-0.5 pt-1.5">
-        <AIActionPanel
-          isOpen={isAiPanelOpen}
-          onToggle={() => setIsAiPanelOpen((prev) => !prev)}
-          disabled={uploading || sending}
-          isSummarizing={isSummarizing}
-          isSuggesting={isSuggesting}
-          onSummarize={() => {
-            void summarizeConversation(currentMessagesForAISummary);
-          }}
-          onSuggest={() => {
-            void suggestReplies();
-          }}
-        />
-        {isAiPanelOpen && (
-          <AIResultPanel
-            summary={summary}
-            suggestions={suggestions}
-            error={aiError}
-            isSummarizing={isSummarizing}
-            isSuggesting={isSuggesting}
-            onSuggestionClick={handleApplySuggestion}
-          />
-        )}
-      </div>
-
       {/* Input */}
       <div className=" bg-white px-4 pb-3.5 pt-2.5 dark:border-gray-700/70 dark:bg-black">
         {/* Hidden file inputs */}
@@ -2874,15 +2849,19 @@ function ChatWindowContent({
                     </button>
                     <button
                       type="button"
-                      onClick={() => setPlusMenuOpen(false)}
-                      className="flex items-center gap-3 w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 opacity-50 cursor-not-allowed"
+                      onClick={() => {
+                        setPlusMenuOpen(false);
+                        setIsAiPanelOpen(true);
+                      }}
+                      disabled={uploading || sending}
+                      className="flex items-center gap-3 w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      <StickyNote
+                      <Sparkles
                         size={20}
-                        className="text-gray-700 dark:text-gray-300 shrink-0"
+                        className="text-blue-600 dark:text-blue-300 shrink-0"
                       />
                       <span className="text-sm text-gray-800 dark:text-gray-100">
-                        Chọn nhãn dán
+                        Sử dụng AI
                       </span>
                     </button>
                     <button
@@ -3244,6 +3223,48 @@ function ChatWindowContent({
                 {callPickerMode === "invite" ? "Mời" : "Gọi"}
               </button>
             </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {isAiPanelOpen && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-black/45 px-4">
+          <div className="w-full max-w-lg rounded-xl bg-white p-3 shadow-2xl dark:bg-gray-900">
+            <div className="mb-2 flex items-center justify-between px-1">
+              <h3 className="text-base font-semibold text-gray-900 dark:text-white">
+                Sử dụng AI
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsAiPanelOpen(false)}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+                title="Đóng"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <AIActionPanel
+              isOpen
+              onToggle={() => setIsAiPanelOpen(false)}
+              disabled={uploading || sending}
+              isSummarizing={isSummarizing}
+              isSuggesting={isSuggesting}
+              onSummarize={() => {
+                void summarizeConversation(currentMessagesForAISummary);
+              }}
+              onSuggest={() => {
+                void suggestReplies();
+              }}
+            />
+            <AIResultPanel
+              summary={summary}
+              suggestions={suggestions}
+              error={aiError}
+              isSummarizing={isSummarizing}
+              isSuggesting={isSuggesting}
+              onSuggestionClick={handleApplySuggestion}
+            />
           </div>
         </div>,
         document.body
