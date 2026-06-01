@@ -1,15 +1,36 @@
-import axios, { type AxiosInstance } from "axios";
+import axios, { type AxiosInstance, type AxiosError, type InternalAxiosRequestConfig } from "axios";
 import { getCookie, setCookie, clearAuthStorage } from "../utils/cookies";
 import { API_BASE_URL } from "../config/backend";
 
 const TOKEN_TTL_DAYS = 1/24;
-const REFRESH_MARGIN = 5 * 60 * 1000; 
+const REFRESH_MARGIN = 5 * 60 * 1000;
 const EXPIRES_COOKIE = 'tokenExpiresAt';
 const ACCESS_COOKIE  = 'accessToken';
+
+// ─── Retry / Timeout config ─────────────────────────────────────────────────
+const DEFAULT_TIMEOUT   = 15_000;   // 15s cho mỗi request
+const MAX_RETRIES       = 3;        // Tối đa 3 lần retry
+const RETRY_BASE_DELAY  = 1_000;    // Delay cơ bản 1s, exponential backoff
+const RETRYABLE_STATUS  = new Set([408, 429, 500, 502, 503, 504]);
+
+interface RetryConfig extends InternalAxiosRequestConfig {
+    _retry?: boolean;
+    _retryCount?: number;
+}
+
+const isRetryable = (error: AxiosError): boolean => {
+    if (error.code === 'ECONNABORTED' || error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
+        return true;
+    }
+    return !!error.response && RETRYABLE_STATUS.has(error.response.status);
+};
+
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Instance chính — có interceptor
 const axiosClient: AxiosInstance = axios.create({
     baseURL: API_BASE_URL,
+    timeout: DEFAULT_TIMEOUT,
     withCredentials: true,
     headers: {
         "Content-Type": "application/json",
@@ -120,19 +141,18 @@ axiosClient.interceptors.request.use(
     (error) => Promise.reject(error)
 );
 
-// ─── Response interceptor ─────────────────────────────────────────────────────
+// ─── Response interceptor (retry + auth refresh) ─────────────────────────────
 
 axiosClient.interceptors.response.use(
     (response) => response,
-    async (error) => {
+    async (error: AxiosError) => {
+        const config = error.config as RetryConfig | undefined;
+        if (!config) return Promise.reject(error);
+
         const status = error.response?.status;
-        const config = error.config;
 
-        if (isPublicEndpoint(config?.url)) {
-            return Promise.reject(error);
-        }
-
-        if (status === 401 && config && !config._retry) {
+        // --- Auth refresh (401) — chỉ thử 1 lần ---
+        if (status === 401 && !isPublicEndpoint(config.url) && !config._retry) {
             config._retry = true;
 
             const ok = await ensureFreshToken();
@@ -144,6 +164,24 @@ axiosClient.interceptors.response.use(
             if (window.location.pathname !== '/login') {
                 window.location.href = '/login';
             }
+            return Promise.reject(error);
+        }
+
+        // --- Retry với exponential backoff ---
+        const retryCount = config._retryCount ?? 0;
+
+        if (retryCount < MAX_RETRIES && isRetryable(error)) {
+            config._retryCount = retryCount + 1;
+
+            const backoff = RETRY_BASE_DELAY * Math.pow(2, retryCount);
+            const jitter  = backoff * (0.5 + Math.random() * 0.5);
+
+            console.warn(
+                `[axios-retry] Retry ${config._retryCount}/${MAX_RETRIES} after ${Math.round(jitter)}ms — ${config.method?.toUpperCase()} ${config.url} (${error.code || status})`
+            );
+
+            await delay(jitter);
+            return axiosClient(config);
         }
 
         return Promise.reject(error);
