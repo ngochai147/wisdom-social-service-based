@@ -6,6 +6,11 @@ server:
 spring:
   application:
     name: gateway-service
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+      password: ${SPRING_DATA_REDIS_PASSWORD:}
   cloud:
     gateway:
       # Khu header CORS bi lap khi backend cung tra CORS -> tranh loi
@@ -22,6 +27,25 @@ gateway:
     notification: ${NOTIFICATION_URI:http://localhost:8084}
     ai: ${AI_URI:http://localhost:8085}
     media: ${MEDIA_URI:http://localhost:8081}
+
+rate-limit:
+  enabled: true
+  # Anonymous (theo IP) — strict hon
+  anonymous:
+    max-requests: 60
+    window-seconds: 60
+  # Authenticated (theo userId) — thoang hon
+  authenticated:
+    max-requests: 200
+    window-seconds: 60
+  # Override cho tung nhom route (key = route prefix, khong co dau /)
+  routes:
+    api/auth:
+      max-requests: 20
+      window-seconds: 60
+    api/ai:
+      max-requests: 10
+      window-seconds: 60
 
 management:
   endpoints:
