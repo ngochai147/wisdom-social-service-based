@@ -9,14 +9,6 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
-/**
- * REST stub cua {@link NotificationService} cho content-service.
- *
- * <p>Day {@link NotificationEvent} sang notification-service qua REST
- * ({@code POST ${notification.service.base-url}/internal/notifications}).
- * Notification la optional: moi loi (mang / HTTP) duoc nuot (log.warn) va KHONG
- * ney ra de tranh lam fail nghiep vu content.</p>
- */
 @Service
 @Slf4j
 public class RemoteNotificationServiceImpl implements NotificationService {

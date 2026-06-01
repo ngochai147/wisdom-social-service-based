@@ -177,20 +177,10 @@ public class RemoteMediaStorageAdapter implements MediaStoragePort {
                 .body(String.class));
     }
 
-    /**
-     * Goi remote media-service va chuyen doi loi HTTP/mang thanh media exception cua boundary.
-     *
-     * <ul>
-     *   <li>503 tu media-service / loi ket noi (ResourceAccessException) -> {@link MediaUnavailableException}.</li>
-     *   <li>Cac status loi khac (4xx/5xx) -> {@link MediaStorageException}.</li>
-     *   <li>Loi RestClient chung -> {@link MediaUnavailableException}.</li>
-     * </ul>
-     */
     private <T> T call(String operation, Supplier<T> action) {
         try {
             return action.get();
         } catch (ResourceAccessException ex) {
-            // Khong ket noi duoc media-service (connection refused, timeout I/O).
             log.warn("Media service unreachable during '{}': {}", operation, ex.getMessage());
             throw new MediaUnavailableException("Media service is temporarily unavailable", ex);
         } catch (HttpStatusCodeException ex) {

@@ -24,9 +24,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /*
  * @description: Post management controller
@@ -338,38 +335,4 @@ public class PostController {
         }
     }
 
-    // ─── Test Retry Endpoint ─────────────────────────────────────────────────
-    // Mỗi clientId có counter riêng. Fail `failCount` lần đầu, lần sau trả 200.
-    // Reset counter sau khi thành công để test lại được.
-    // Ví dụ: GET /api/posts/test-retry?clientId=abc&failCount=2
-    //   → Lần 1: 503, Lần 2: 503, Lần 3: 200 OK
-
-    private final ConcurrentHashMap<String, AtomicInteger> retryCounters = new ConcurrentHashMap<>();
-
-    @GetMapping("/test-retry")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> testRetry(
-            @RequestParam(defaultValue = "default") String clientId,
-            @RequestParam(defaultValue = "2") int failCount) {
-
-        AtomicInteger counter = retryCounters.computeIfAbsent(clientId, k -> new AtomicInteger(0));
-        int attempt = counter.incrementAndGet();
-
-        log.info("[test-retry] clientId={}, attempt={}/{}", clientId, attempt, failCount + 1);
-
-        if (attempt <= failCount) {
-            return ResponseEntity.status(503)
-                    .body(ApiResponse.error(503,
-                            "Lỗi giả lập lần " + attempt + "/" + failCount + " — server tạm thời không khả dụng",
-                            null));
-        }
-
-        counter.set(0);
-        return ResponseEntity.ok(ApiResponse.success(200,
-                "Thành công sau " + (attempt - 1) + " lần fail!",
-                Map.of(
-                        "totalAttempts", attempt,
-                        "failedAttempts", attempt - 1,
-                        "clientId", clientId
-                )));
-    }
 }

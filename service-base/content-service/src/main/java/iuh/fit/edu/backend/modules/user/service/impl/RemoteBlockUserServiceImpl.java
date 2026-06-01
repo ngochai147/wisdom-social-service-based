@@ -9,14 +9,6 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
-/**
- * REST stub cua {@link BlockUserService} cho content-service.
- *
- * <p>Hanh dong block/unblock duoc uy thac sang user-service qua REST
- * ({@code POST/DELETE ${user.service.base-url}/internal/blocks}). Loi mang / HTTP
- * duoc nuot (log.warn) va tra ve {@code false} de KHONG lam fail nghiep vu content.
- * Day la muc compile-level; provider endpoint se duoc them sau.</p>
- */
 @Service
 @Slf4j
 public class RemoteBlockUserServiceImpl implements BlockUserService {
