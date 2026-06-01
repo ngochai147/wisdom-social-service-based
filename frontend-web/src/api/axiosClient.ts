@@ -144,7 +144,15 @@ axiosClient.interceptors.request.use(
 // ─── Response interceptor (retry + auth refresh) ─────────────────────────────
 
 axiosClient.interceptors.response.use(
-    (response) => response,
+    (response) => {
+        const config = response.config as RetryConfig;
+        if (config._retryCount && config._retryCount > 0) {
+            console.info(
+                `[axios-retry] SUCCESS after ${config._retryCount} retries — ${config.method?.toUpperCase()} ${config.url}`
+            );
+        }
+        return response;
+    },
     async (error: AxiosError) => {
         const config = error.config as RetryConfig | undefined;
         if (!config) return Promise.reject(error);

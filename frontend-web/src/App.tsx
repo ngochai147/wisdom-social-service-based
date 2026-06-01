@@ -28,6 +28,7 @@ import CheckInbox from "./pages/CheckInbox";
 import VerifyOTP from "./pages/VerifyOTP";
 import ResetPassword from "./pages/ResetPassword";
 import QRLogin from "./pages/QRLogin";
+import RetryTest from "./pages/RetryTest";
 import GroupInvite from "./pages/GroupInvite";
 
 // Private Pages
@@ -130,6 +131,7 @@ function App() {
                       />
                     </Route>
                     <Route path="/g/:token" element={<GroupInvite />} />
+                    <Route path="/retry-test" element={<RetryTest />} />
 
                     {/* Private Routes */}
                     <Route
